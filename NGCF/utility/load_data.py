@@ -20,7 +20,9 @@ class Data(object):
 
         #get number of users and items
         self.n_users, self.n_items = 0, 0
+		#总user/item数
         self.n_train, self.n_test = 0, 0
+		#非空即user-item interaction数目
         self.neg_pools = {}
 
         self.exist_users = []
@@ -64,9 +66,10 @@ class Data(object):
 
                     for i in train_items:
                         self.R[uid, i] = 1.
-                        # self.R[uid][i] = 1
+                    #R为交互矩阵
 
                     self.train_items[uid] = train_items
+					#Ru
 
                 for l in f_test.readlines():
                     if len(l) == 0: break
@@ -78,6 +81,7 @@ class Data(object):
 
                     uid, test_items = items[0], items[1:]
                     self.test_set[uid] = test_items
+					#Ru
 
     def get_adj_mat(self):
         try:
@@ -98,26 +102,34 @@ class Data(object):
         t1 = time()
         adj_mat = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
         adj_mat = adj_mat.tolil()
+		#链表稀疏矩阵lil
         R = self.R.tolil()
 
+		#矩阵总大小是(n+m)*(n+m)的，这两步相当于eq(8)，亦即A矩阵
         adj_mat[:self.n_users, self.n_users:] = R
         adj_mat[self.n_users:, :self.n_users] = R.T
         adj_mat = adj_mat.todok()
+		#Convert this matrix to Dictionary Of Keys format.
         print('already create adjacency matrix', adj_mat.shape, time() - t1)
 
         t2 = time()
 
+		#使矩阵变成单位矩阵
         def normalized_adj_single(adj):
             rowsum = np.array(adj.sum(1))
-
+			#(n+m)*1矩阵，每行为原矩阵相应行之和
             d_inv = np.power(rowsum, -1).flatten()
+			#每个数取倒并排列为行向量
             d_inv[np.isinf(d_inv)] = 0.
+			#原本为零取倒为inf，这里对inf进行赋零
             d_mat_inv = sp.diags(d_inv)
+			#建立稀疏的对角阵(rowsum中0可能很多)
 
             norm_adj = d_mat_inv.dot(adj)
             # norm_adj = adj.dot(d_mat_inv)
             print('generate single-normalized adjacency matrix.')
             return norm_adj.tocoo()
+			#Convert this matrix to Coordinate format.一种稀疏矩阵存储方式
 
         def check_adj_if_equal(adj):
             dense_A = np.array(adj.todense())
@@ -132,6 +144,7 @@ class Data(object):
 
         print('already normalize adjacency matrix', time() - t2)
         return adj_mat.tocsr(), norm_adj_mat.tocsr(), mean_adj_mat.tocsr()
+		#Convert this matrix to Compressed Sparse Row format.很巧妙的一种存储方式
 
     def negative_pool(self):
         t1 = time()

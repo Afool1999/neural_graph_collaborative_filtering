@@ -52,6 +52,7 @@ class NGCF(object):
         # placeholder definition
         self.users = tf.placeholder(tf.int32, shape=(None,))
         self.pos_items = tf.placeholder(tf.int32, shape=(None,))
+		#placeholder 是张量占位符
         self.neg_items = tf.placeholder(tf.int32, shape=(None,))
 
         # dropout: node dropout (adopted on the ego-networks);
@@ -61,6 +62,7 @@ class NGCF(object):
         self.node_dropout_flag = args.node_dropout_flag
         self.node_dropout = tf.placeholder(tf.float32, shape=[None])
         self.mess_dropout = tf.placeholder(tf.float32, shape=[None])
+		#站位，具体数值到时再传
 
         """
         *********************************************************
@@ -115,10 +117,12 @@ class NGCF(object):
         all_weights = dict()
 
         initializer = tf.contrib.layers.xavier_initializer()
+		#创建初始化权重的函数
 
         if self.pretrain_data is None:
             all_weights['user_embedding'] = tf.Variable(initializer([self.n_users, self.emb_dim]), name='user_embedding')
             all_weights['item_embedding'] = tf.Variable(initializer([self.n_items, self.emb_dim]), name='item_embedding')
+			#embedding layer的权重矩阵
             print('using xavier initialization')
         else:
             all_weights['user_embedding'] = tf.Variable(initial_value=self.pretrain_data['user_embed'], trainable=True,
@@ -128,7 +132,9 @@ class NGCF(object):
             print('using pretrained initialization')
 
         self.weight_size_list = [self.emb_dim] + self.weight_size
+		#每一层layer数的list
 
+		#两层之间的权重矩阵
         for k in range(self.n_layers):
             all_weights['W_gc_%d' %k] = tf.Variable(
                 initializer([self.weight_size_list[k], self.weight_size_list[k+1]]), name='W_gc_%d' % k)
@@ -164,6 +170,7 @@ class NGCF(object):
     def _split_A_hat_node_dropout(self, X):
         A_fold_hat = []
 
+		#分多个fold进行dropout操作，减少内存占用？
         fold_len = (self.n_users + self.n_items) // self.n_fold
         for i_fold in range(self.n_fold):
             start = i_fold * fold_len
@@ -174,8 +181,10 @@ class NGCF(object):
 
             # A_fold_hat.append(self._convert_sp_mat_to_sp_tensor(X[start:end]))
             temp = self._convert_sp_mat_to_sp_tensor(X[start:end])
+			#转换成稀疏张量
             n_nonzero_temp = X[start:end].count_nonzero()
             A_fold_hat.append(self._dropout_sparse(temp, 1 - self.node_dropout[0], n_nonzero_temp))
+			#Keep probability w.r.t. node dropout (i.e., 1-dropout_ratio) for each deep layer. 1: no dropout.
 
         return A_fold_hat
 
@@ -188,6 +197,7 @@ class NGCF(object):
             A_fold_hat = self._split_A_hat(self.norm_adj)
 
         ego_embeddings = tf.concat([self.weights['user_embedding'], self.weights['item_embedding']], axis=0)
+		#拼接张量eq(9)
 
         all_embeddings = [ego_embeddings]
 
@@ -290,7 +300,9 @@ class NGCF(object):
     def _convert_sp_mat_to_sp_tensor(self, X):
         coo = X.tocoo().astype(np.float32)
         indices = np.mat([coo.row, coo.col]).transpose()
+		#有value的[x,y]的索引矩阵
         return tf.SparseTensor(indices, coo.data, coo.shape)
+		#稀疏张量
 
     def _dropout_sparse(self, X, keep_prob, n_nonzero_elems):
         """
@@ -299,10 +311,13 @@ class NGCF(object):
         noise_shape = [n_nonzero_elems]
         random_tensor = keep_prob
         random_tensor += tf.random_uniform(noise_shape)
+		#0-1之间均匀分布的随机数，这样有keep_prob的概率保留
         dropout_mask = tf.cast(tf.floor(random_tensor), dtype=tf.bool)
         pre_out = tf.sparse_retain(X, dropout_mask)
+		#非空值中保留dropout_mask中为true的值
 
         return pre_out * tf.div(1., keep_prob)
+		#不懂
 
 def load_pretrained_data():
     pretrain_path = '%spretrain/%s/%s.npz' % (args.proj_path, args.dataset, 'embedding')
@@ -326,20 +341,24 @@ if __name__ == '__main__':
     """
     plain_adj, norm_adj, mean_adj = data_generator.get_adj_mat()
 
+	#原矩阵A
     if args.adj_type == 'plain':
         config['norm_adj'] = plain_adj
         print('use the plain adjacency matrix')
 
+	#A+I后转化为单位阵
     elif args.adj_type == 'norm':
         config['norm_adj'] = norm_adj
         print('use the normalized adjacency matrix')
 
+	#A转化为单位阵
     elif args.adj_type == 'gcmc':
         config['norm_adj'] = mean_adj
         print('use the gcmc adjacency matrix')
 
     else:
         config['norm_adj'] = mean_adj + sp.eye(mean_adj.shape[0])
+		#mean_adj.shape=(n,m),eye作用为生成m*m单位矩阵,程序中n=m
         print('use the mean adjacency matrix')
 
     t0 = time()
