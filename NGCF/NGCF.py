@@ -181,14 +181,16 @@ class NGCF(object):
 
             # A_fold_hat.append(self._convert_sp_mat_to_sp_tensor(X[start:end]))
             temp = self._convert_sp_mat_to_sp_tensor(X[start:end])
-			#转换成稀疏张量
+			#转换成稀疏张量,X[start:end]是取X矩阵的行而非列!!
             n_nonzero_temp = X[start:end].count_nonzero()
             A_fold_hat.append(self._dropout_sparse(temp, 1 - self.node_dropout[0], n_nonzero_temp))
 			#Keep probability w.r.t. node dropout (i.e., 1-dropout_ratio) for each deep layer. 1: no dropout.
 
         return A_fold_hat
 
+	#实现High-order Propagation
     def _create_ngcf_embed(self):
+
         # Generate a set of adjacency sub-matrix.
         if self.node_dropout_flag:
             # node dropout.
@@ -197,7 +199,7 @@ class NGCF(object):
             A_fold_hat = self._split_A_hat(self.norm_adj)
 
         ego_embeddings = tf.concat([self.weights['user_embedding'], self.weights['item_embedding']], axis=0)
-		#拼接张量eq(9)
+		#embedding layer eq(1)
 
         all_embeddings = [ego_embeddings]
 
@@ -205,16 +207,24 @@ class NGCF(object):
 
             temp_embed = []
             for f in range(self.n_fold):
-                temp_embed.append(tf.sparse_tensor_dense_matmul(A_fold_hat[f], ego_embeddings))
+                temp_embed.append(tf.sparse.sparse_dense_matmul(A_fold_hat[f], ego_embeddings))
 
             # sum messages of neighbors.
             side_embeddings = tf.concat(temp_embed, 0)
+			#↑这里实现LE↑
+
             # transformed sum messages of neighbors.
+            print(tf.matmul(side_embeddings, self.weights['W_gc_%d' % k]).get_shape(),self.weights['b_gc_%d' % k].get_shape())
             sum_embeddings = tf.nn.leaky_relu(
-                tf.matmul(side_embeddings, self.weights['W_gc_%d' % k]) + self.weights['b_gc_%d' % k])
+                tf.matmul(side_embeddings, self.weights['W_gc_%d' % k]) + self.weights['b_gc_%d' % k]
+				#这里的加法和矩阵加法不一样，可以看做把self.weights['b_gc_%d' % k]矩阵重复多遍的大矩阵与前面相加
+				)
 
             # bi messages of neighbors.
             bi_embeddings = tf.multiply(ego_embeddings, side_embeddings)
+			#元素级别相乘
+
+
             # transformed bi messages of neighbors.
             bi_embeddings = tf.nn.leaky_relu(
                 tf.matmul(bi_embeddings, self.weights['W_bi_%d' % k]) + self.weights['b_bi_%d' % k])
@@ -229,9 +239,12 @@ class NGCF(object):
             norm_embeddings = tf.math.l2_normalize(ego_embeddings, axis=1)
 
             all_embeddings += [norm_embeddings]
+			#三维的
 
         all_embeddings = tf.concat(all_embeddings, 1)
+		#把每一层得到的emdedding当做列向量拼接
         u_g_embeddings, i_g_embeddings = tf.split(all_embeddings, [self.n_users, self.n_items], 0)
+		#拆分，左边是user的右边是item的
         return u_g_embeddings, i_g_embeddings
 
     def _create_gcn_embed(self):
@@ -356,6 +369,7 @@ if __name__ == '__main__':
         config['norm_adj'] = mean_adj
         print('use the gcmc adjacency matrix')
 
+	#ngcf
     else:
         config['norm_adj'] = mean_adj + sp.eye(mean_adj.shape[0])
 		#mean_adj.shape=(n,m),eye作用为生成m*m单位矩阵,程序中n=m

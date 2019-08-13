@@ -138,9 +138,12 @@ class Data(object):
             temp = np.dot(np.diag(np.power(degree, -1)), dense_A)
             print('check normalized adjacency matrix whether equal to this laplacian matrix.')
             return temp
-
+        
+        #adj_mat <=> plain
         norm_adj_mat = normalized_adj_single(adj_mat + sp.eye(adj_mat.shape[0]))
+		#norm
         mean_adj_mat = normalized_adj_single(adj_mat)
+		#gcmc
 
         print('already normalize adjacency matrix', time() - t2)
         return adj_mat.tocsr(), norm_adj_mat.tocsr(), mean_adj_mat.tocsr()
@@ -159,12 +162,15 @@ class Data(object):
             users = rd.sample(self.exist_users, self.batch_size)
         else:
             users = [rd.choice(self.exist_users) for _ in range(self.batch_size)]
+			#随机取batch_size个元素
 
 
+		#↓效率可能不高↓
         def sample_pos_items_for_u(u, num):
             pos_items = self.train_items[u]
             n_pos_items = len(pos_items)
             pos_batch = []
+			#不能直接用rd.sample吗
             while True:
                 if len(pos_batch) == num: break
                 pos_id = np.random.randint(low=0, high=n_pos_items, size=1)[0]
