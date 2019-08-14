@@ -299,12 +299,15 @@ class NGCF(object):
         neg_scores = tf.reduce_sum(tf.multiply(users, neg_items), axis=1)
 
         regularizer = tf.nn.l2_loss(users) + tf.nn.l2_loss(pos_items) + tf.nn.l2_loss(neg_items)
+		#output = sum(t**2)/2
         regularizer = regularizer/self.batch_size
 
         maxi = tf.log(tf.nn.sigmoid(pos_scores - neg_scores))
+		#eq(11)
         mf_loss = tf.negative(tf.reduce_mean(maxi))
 
         emb_loss = self.decay * regularizer
+		#lambda*xxx
 
         reg_loss = tf.constant(0.0, tf.float32, [1])
 
@@ -457,7 +460,7 @@ if __name__ == '__main__':
         f = open(report_path, 'w')
         f.write(
             'embed_size=%d, lr=%.4f, layer_size=%s, keep_prob=%s, regs=%s, loss_type=%s, adj_type=%s\n'
-            % (args.embed_size, args.lr, args.layer_size, args.keep_prob, args.regs, args.loss_type, args.adj_type))
+            % (args.embed_size, args.lr, args.layer_size, 1 - args.keep_prob, args.regs, args.loss_type, args.adj_type))
 
         for i, users_to_test in enumerate(users_to_test_list):
             ret = test(sess, model, users_to_test, drop_flag=True)
@@ -489,7 +492,8 @@ if __name__ == '__main__':
         for idx in range(n_batch):
             users, pos_items, neg_items = data_generator.sample()
             _, batch_loss, batch_mf_loss, batch_emb_loss, batch_reg_loss = sess.run([model.opt, model.loss, model.mf_loss, model.emb_loss, model.reg_loss],
-                               feed_dict={model.users: users, model.pos_items: pos_items,
+                               feed_dict={model.users: users, 
+										  model.pos_items: pos_items,
                                           model.node_dropout: eval(args.node_dropout),
                                           model.mess_dropout: eval(args.mess_dropout),
                                           model.neg_items: neg_items})
@@ -513,7 +517,6 @@ if __name__ == '__main__':
         t2 = time()
         users_to_test = list(data_generator.test_set.keys())
         ret = test(sess, model, users_to_test, drop_flag=True)
-
         t3 = time()
 
         loss_loger.append(loss)

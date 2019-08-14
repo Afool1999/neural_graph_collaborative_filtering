@@ -40,6 +40,7 @@ def ranklist_by_heapq(user_pos_test, test_items, rating, Ks):
 
 def get_auc(item_score, user_pos_test):
     item_score = sorted(item_score.items(), key=lambda kv: kv[1])
+	#按键值排序,返回list
     item_score.reverse()
     item_sort = [x[0] for x in item_score]
     posterior = [x[1] for x in item_score]
@@ -74,10 +75,10 @@ def get_performance(user_pos_test, r, auc, Ks):
     precision, recall, ndcg, hit_ratio = [], [], [], []
 
     for K in Ks:
-        precision.append(metrics.precision_at_k(r, K))
-        recall.append(metrics.recall_at_k(r, K, len(user_pos_test)))
+        precision.append(metrics.precision_at_k(r, K))#P = TP/ (TP+FP)
+        recall.append(metrics.recall_at_k(r, K, len(user_pos_test)))#R = TP/ (TP+FN)
         ndcg.append(metrics.ndcg_at_k(r, K))
-        hit_ratio.append(metrics.hit_at_k(r, K))
+        hit_ratio.append(metrics.hit_at_k(r, K))#HR = SIGMA(TP) / SIGMA(test_set)
 
     return {'recall': np.array(recall), 'precision': np.array(precision),
             'ndcg': np.array(ndcg), 'hit_ratio': np.array(hit_ratio), 'auc': auc}
@@ -100,6 +101,8 @@ def test_one_user(x):
 
     test_items = list(all_items - set(training_items))
 
+	#r为预测命中与否的集合，0未命中，1命中
+	#两个函数的区别在于有没有计算auc，与heapq还是sorted无关
     if args.test_flag == 'part':
         r, auc = ranklist_by_heapq(user_pos_test, test_items, rating, Ks)
     else:
@@ -109,8 +112,10 @@ def test_one_user(x):
 
 
 def test(sess, model, users_to_test, drop_flag=False, batch_test_flag=False):
+
     result = {'precision': np.zeros(len(Ks)), 'recall': np.zeros(len(Ks)), 'ndcg': np.zeros(len(Ks)),
               'hit_ratio': np.zeros(len(Ks)), 'auc': 0.}
+
 
     pool = multiprocessing.Pool(cores)
 
@@ -121,14 +126,18 @@ def test(sess, model, users_to_test, drop_flag=False, batch_test_flag=False):
     n_test_users = len(test_users)
     n_user_batchs = n_test_users // u_batch_size + 1
 
+    print(n_user_batchs,n_test_users)
+
     count = 0
 
     for u_batch_id in range(n_user_batchs):
+
         start = u_batch_id * u_batch_size
         end = (u_batch_id + 1) * u_batch_size
 
         user_batch = test_users[start: end]
 
+		#分块测试标志
         if batch_test_flag:
 
             n_item_batchs = ITEM_NUM // i_batch_size + 1

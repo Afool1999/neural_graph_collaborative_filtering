@@ -233,7 +233,7 @@ class Data(object):
         return split_uids, split_state
 
 
-
+	#创建四个不同sparsity的集合
     def create_sparsity_split(self):
         all_users_to_test = list(self.test_set.keys())
         user_n_iid = dict()
@@ -255,12 +255,17 @@ class Data(object):
         temp = []
         count = 1
         fold = 4
+		#总interaction数
         n_count = (self.n_train + self.n_test)
         n_rates = 0
 
         split_state = []
         for idx, n_iids in enumerate(sorted(user_n_iid)):
+			#a={1:2,5:231}
+			#list(enumerate(a))
+			#>[(0,1),(1,5)]
             temp += user_n_iid[n_iids]
+			#长度*个数
             n_rates += n_iids * len(user_n_iid[n_iids])
             n_count -= n_iids * len(user_n_iid[n_iids])
 
