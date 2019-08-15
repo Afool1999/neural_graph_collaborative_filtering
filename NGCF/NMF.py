@@ -88,6 +88,7 @@ class NMF(object):
 
         if self.model_type == 'mlp':
             self.weight_size_list = [2 * self.emb_dim] + self.weight_size
+			#因为eq(10),user和item的embeddings合在一起了
         elif self.model_type == 'jrl':
             self.weight_size_list = [self.emb_dim] + self.weight_size
         else:

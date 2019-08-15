@@ -294,12 +294,14 @@ class NGCF(object):
         return u_g_embeddings, i_g_embeddings
 
 
+	#这里传入的users，pos_items等都为经过传播的embeddings
     def create_bpr_loss(self, users, pos_items, neg_items):
         pos_scores = tf.reduce_sum(tf.multiply(users, pos_items), axis=1)
+		#这里是对应元素相乘后每个user的预测值求和
         neg_scores = tf.reduce_sum(tf.multiply(users, neg_items), axis=1)
 
         regularizer = tf.nn.l2_loss(users) + tf.nn.l2_loss(pos_items) + tf.nn.l2_loss(neg_items)
-		#output = sum(t**2)/2
+		#output = sum(t**2)/2,embeddings的l2
         regularizer = regularizer/self.batch_size
 
         maxi = tf.log(tf.nn.sigmoid(pos_scores - neg_scores))
@@ -307,7 +309,7 @@ class NGCF(object):
         mf_loss = tf.negative(tf.reduce_mean(maxi))
 
         emb_loss = self.decay * regularizer
-		#lambda*xxx
+		#lambda*theta^2
 
         reg_loss = tf.constant(0.0, tf.float32, [1])
 
