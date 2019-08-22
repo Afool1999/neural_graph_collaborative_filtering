@@ -65,22 +65,6 @@ def parse_args():
 
     parser.add_argument('--report', type=int, default=0,
                         help='0: Disable performance report w.r.t. sparsity levels, 1: Show performance report w.r.t. sparsity levels')
+    parser.add_argument('--negative_samples', type = int, default = 2,
+                        help='Specify the number of negative samples while sampling the training data.')
     return parser.parse_args()
-
-
-
-
-#`adj_type`
-#  * It specifies the type of laplacian matrix where each entry defines the
-#    decay factor between two connected nodes.
-#  * Here we provide four options:
-#  * `ngcf` (by default), where each decay factor between two connected
-#    nodes is set as 1(out degree of the node), while each node is also 
-#    assigned with 1 for self-connections. Usage: `--adj_type ngcf`.
-#  * `plain`, where each decay factor between two connected nodes is set 
-#    as 1. No self-connections are considered. Usage: `--adj_type plain`.
-#  * `norm`, where each decay factor bewteen two connected nodes is set as
-#    1/(out degree of the node + self-conncetion). Usage: `--adj_type norm`.
-#  * `gcmc`, where each decay factor between two connected nodes is set 
-#    as 1/(out degree of the node). No self-connections are considered. 
-#    Usage: `--adj_type gcmc`.

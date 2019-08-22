@@ -9,18 +9,21 @@ import numpy as np
 import random as rd
 import scipy.sparse as sp
 from time import time
+from utility.helper import *
 
 class Data(object):
-    def __init__(self, path, batch_size):
+    def __init__(self, path, batch_size, dataset, neg_num):
         self.path = path
         self.batch_size = batch_size
+        self.dataset = dataset
+        self.neg_num = neg_num
 
         train_file = path + '/train.txt'
         test_file = path + '/test.txt'
 
         #get number of users and items
         self.n_users, self.n_items = 0, 0
-		#总user/item数
+		#总user/item
         self.n_train, self.n_test = 0, 0
 		#非空即user-item interaction数目
         self.neg_pools = {}
@@ -66,7 +69,7 @@ class Data(object):
 
                     for i in train_items:
                         self.R[uid, i] = 1.
-                    #R为交互矩阵
+                    #R为交互矩
 
                     self.train_items[uid] = train_items
 					#Ru
@@ -86,16 +89,17 @@ class Data(object):
     def get_adj_mat(self):
         try:
             t1 = time()
-            adj_mat = sp.load_npz(self.path + '/s_adj_mat.npz')
-            norm_adj_mat = sp.load_npz(self.path + '/s_norm_adj_mat.npz')
-            mean_adj_mat = sp.load_npz(self.path + '/s_mean_adj_mat.npz')
+            adj_mat = sp.load_npz('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_adj_mat'))
+            norm_adj_mat = sp.load_npz('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_norm_mat'))
+            mean_adj_mat = sp.load_npz('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_mean_mat'))
             print('already load adj matrix', adj_mat.shape, time() - t1)
 
         except Exception:
             adj_mat, norm_adj_mat, mean_adj_mat = self.create_adj_mat()
-            sp.save_npz(self.path + '/s_adj_mat.npz', adj_mat)
-            sp.save_npz(self.path + '/s_norm_adj_mat.npz', norm_adj_mat)
-            sp.save_npz(self.path + '/s_mean_adj_mat.npz', mean_adj_mat)
+            ensureDir('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_adj_mat'))
+            sp.save_npz('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_adj_mat'), adj_mat)
+            sp.save_npz('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_norm_mat'), norm_adj_mat)
+            sp.save_npz('/output/%s/mat/%s/%s.npz' % (self.neg_num , self.dataset, 's_mean_mat'), mean_adj_mat)
         return adj_mat, norm_adj_mat, mean_adj_mat
 
     def create_adj_mat(self):
@@ -114,7 +118,7 @@ class Data(object):
 
         t2 = time()
 
-		#使矩阵变成单位矩阵
+		#使矩阵变成单位矩
         def normalized_adj_single(adj):
             rowsum = np.array(adj.sum(1))
 			#(n+m)*1矩阵，每行为原矩阵相应行之和
@@ -123,13 +127,13 @@ class Data(object):
             d_inv[np.isinf(d_inv)] = 0.
 			#原本为零取倒为inf，这里对inf进行赋零
             d_mat_inv = sp.diags(d_inv)
-			#建立稀疏的对角阵(rowsum中0可能很多)
+			#建立稀疏的对角rowsum可能很多)
 
             norm_adj = d_mat_inv.dot(adj)
             # norm_adj = adj.dot(d_mat_inv)
             print('generate single-normalized adjacency matrix.')
             return norm_adj.tocoo()
-			#Convert this matrix to Coordinate format.一种稀疏矩阵存储方式
+			#Convert this matrix to Coordinate format.一种稀疏矩阵存储方
 
         def check_adj_if_equal(adj):
             dense_A = np.array(adj.todense())
@@ -147,7 +151,7 @@ class Data(object):
 
         print('already normalize adjacency matrix', time() - t2)
         return adj_mat.tocsr(), norm_adj_mat.tocsr(), mean_adj_mat.tocsr()
-		#Convert this matrix to Compressed Sparse Row format.很巧妙的一种存储方式
+		#Convert this matrix to Compressed Sparse Row format.很巧妙的一种存储方
 
     def negative_pool(self):
         t1 = time()
@@ -157,20 +161,26 @@ class Data(object):
             self.neg_pools[u] = pools
         print('refresh negative pools', time() - t1)
 
-    def sample(self):
-        if self.batch_size <= self.n_users:
-            users = rd.sample(self.exist_users, self.batch_size)
-        else:
-            users = [rd.choice(self.exist_users) for _ in range(self.batch_size)]
-			#随机取batch_size个元素
+    def sample_pos_items_for_u1(u, num):
+        pos_items = self.train_items[u]
+        n_pos_items = len(pos_items)
+        pos_batch = []
+        while True:
+            if len(pos_batch) == num: break
+            pos_id = np.random.randint(low=0, high=n_pos_items, size=1)[0]
+            pos_i_id = pos_items[pos_id]
+
+            if pos_i_id not in pos_batch:
+                pos_batch.append(pos_i_id)
+        return pos_batch
+
+    def sample(self, ratings, neg_num, users):
 
 
-		#↓效率可能不高↓
         def sample_pos_items_for_u(u, num):
             pos_items = self.train_items[u]
             n_pos_items = len(pos_items)
             pos_batch = []
-			#不能直接用rd.sample吗
             while True:
                 if len(pos_batch) == num: break
                 pos_id = np.random.randint(low=0, high=n_pos_items, size=1)[0]
@@ -180,23 +190,32 @@ class Data(object):
                     pos_batch.append(pos_i_id)
             return pos_batch
 
-        def sample_neg_items_for_u(u, num):
+        def sample_neg_items_for_u(u, X):
             neg_items = []
             while True:
-                if len(neg_items) == num: break
+                if len(neg_items) == X: break
                 neg_id = np.random.randint(low=0, high=self.n_items,size=1)[0]
                 if neg_id not in self.train_items[u] and neg_id not in neg_items:
                     neg_items.append(neg_id)
+        
             return neg_items
-
-        def sample_neg_items_for_u_from_pools(u, num):
-            neg_items = list(set(self.neg_pools[u]) - set(self.train_items[u]))
-            return rd.sample(neg_items, num)
+        
 
         pos_items, neg_items = [], []
-        for u in users:
+        for i in range(len(users)):
+            u = users[i]
+            items_for_u_temp = sample_neg_items_for_u(u, neg_num)
+            item_dict = {}
+
+            #比直接比较更快
+            for j in items_for_u_temp:
+                item_dict[j] = ratings[i][j]
+
+            item_to_add = max(item_dict, key = item_dict.get)  
+
             pos_items += sample_pos_items_for_u(u, 1)
-            neg_items += sample_neg_items_for_u(u, 1)
+            neg_items += [item_to_add]
+            
 
         return users, pos_items, neg_items
 
@@ -212,7 +231,7 @@ class Data(object):
     def get_sparsity_split(self):
         try:
             split_uids, split_state = [], []
-            lines = open(self.path + '/sparsity.split', 'r').readlines()
+            lines = open('/output/%s/%s/sparsity.split' % (self.neg_num , self.dataset), 'r').readlines()
 
             for idx, line in enumerate(lines):
                 if idx % 2 == 0:
@@ -224,7 +243,8 @@ class Data(object):
 
         except Exception:
             split_uids, split_state = self.create_sparsity_split()
-            f = open(self.path + '/sparsity.split', 'w')
+            ensureDir('/output/%s/%s/sparsity.split' % (self.neg_num , self.dataset))
+            f = open('/output/%s/%s/sparsity.split' % (self.neg_num , self.dataset), 'w')
             for idx in range(len(split_state)):
                 f.write(split_state[idx] + '\n')
                 f.write(' '.join([str(uid) for uid in split_uids[idx]]) + '\n')
@@ -233,7 +253,7 @@ class Data(object):
         return split_uids, split_state
 
 
-	#创建四个不同sparsity的集合
+	#创建四个不同sparsity的集
     def create_sparsity_split(self):
         all_users_to_test = list(self.test_set.keys())
         user_n_iid = dict()
@@ -255,7 +275,7 @@ class Data(object):
         temp = []
         count = 1
         fold = 4
-		#总interaction数
+		#总interaction
         n_count = (self.n_train + self.n_test)
         n_rates = 0
 

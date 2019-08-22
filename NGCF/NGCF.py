@@ -6,6 +6,7 @@ Wang Xiang et al. Neural Graph Collaborative Filtering. In SIGIR 2019.
 @author: Xiang Wang (xiangwang@u.nus.edu)
 '''
 import tensorflow as tf
+import numpy as np
 import os
 import sys
 os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
@@ -44,6 +45,7 @@ class NGCF(object):
         self.decay = self.regs[0]
 
         self.verbose = args.verbose
+        self.neg_num = args.negative_samples
 
         '''
         *********************************************************
@@ -62,7 +64,7 @@ class NGCF(object):
         self.node_dropout_flag = args.node_dropout_flag
         self.node_dropout = tf.placeholder(tf.float32, shape=[None])
         self.mess_dropout = tf.placeholder(tf.float32, shape=[None])
-		#站位，具体数值到时再传
+		#站位，具体数值到时再
 
         """
         *********************************************************
@@ -122,7 +124,7 @@ class NGCF(object):
         if self.pretrain_data is None:
             all_weights['user_embedding'] = tf.Variable(initializer([self.n_users, self.emb_dim]), name='user_embedding')
             all_weights['item_embedding'] = tf.Variable(initializer([self.n_items, self.emb_dim]), name='item_embedding')
-			#embedding layer的权重矩阵
+			#embedding layer的权重矩 
             print('using xavier initialization')
         else:
             all_weights['user_embedding'] = tf.Variable(initial_value=self.pretrain_data['user_embed'], trainable=True,
@@ -134,7 +136,7 @@ class NGCF(object):
         self.weight_size_list = [self.emb_dim] + self.weight_size
 		#每一层layer数的list
 
-		#两层之间的权重矩阵
+		#两层之间的权重矩 
         for k in range(self.n_layers):
             all_weights['W_gc_%d' %k] = tf.Variable(
                 initializer([self.weight_size_list[k], self.weight_size_list[k+1]]), name='W_gc_%d' % k)
@@ -181,7 +183,7 @@ class NGCF(object):
 
             # A_fold_hat.append(self._convert_sp_mat_to_sp_tensor(X[start:end]))
             temp = self._convert_sp_mat_to_sp_tensor(X[start:end])
-			#转换成稀疏张量,X[start:end]是取X矩阵的行而非列!!
+			#转换成稀疏张 X[start:end]是取X矩阵的行而非 !
             n_nonzero_temp = X[start:end].count_nonzero()
             A_fold_hat.append(self._dropout_sparse(temp, 1 - self.node_dropout[0], n_nonzero_temp))
 			#Keep probability w.r.t. node dropout (i.e., 1-dropout_ratio) for each deep layer. 1: no dropout.
@@ -207,17 +209,17 @@ class NGCF(object):
 
             temp_embed = []
             for f in range(self.n_fold):
-                temp_embed.append(tf.sparse.sparse_dense_matmul(A_fold_hat[f], ego_embeddings))
+                temp_embed.append(tf.sparse_tensor_dense_matmul(A_fold_hat[f], ego_embeddings))
 
             # sum messages of neighbors.
             side_embeddings = tf.concat(temp_embed, 0)
-			#↑这里实现LE↑
+			#↑这里实现LE 
 
             # transformed sum messages of neighbors.
             print(tf.matmul(side_embeddings, self.weights['W_gc_%d' % k]).get_shape(),self.weights['b_gc_%d' % k].get_shape())
             sum_embeddings = tf.nn.leaky_relu(
                 tf.matmul(side_embeddings, self.weights['W_gc_%d' % k]) + self.weights['b_gc_%d' % k]
-				#这里的加法和矩阵加法不一样，可以看做把self.weights['b_gc_%d' % k]矩阵重复多遍的大矩阵与前面相加
+				#这里的加法和矩阵加法不一样，可以看做把self.weights['b_gc_%d' % k]矩阵重复多遍的大矩阵与前面相 
 				)
 
             # bi messages of neighbors.
@@ -236,15 +238,15 @@ class NGCF(object):
             ego_embeddings = tf.nn.dropout(ego_embeddings, 1 - self.mess_dropout[k])
 
             # normalize the distribution of embeddings.
-            norm_embeddings = tf.math.l2_normalize(ego_embeddings, axis=1)
+            norm_embeddings = tf.nn.l2_normalize(ego_embeddings, axis=1)
 
             all_embeddings += [norm_embeddings]
-			#三维的
+			#三维 
 
         all_embeddings = tf.concat(all_embeddings, 1)
-		#把每一层得到的emdedding当做列向量拼接
+		#把每一层得到的emdedding当做列向量拼 
         u_g_embeddings, i_g_embeddings = tf.split(all_embeddings, [self.n_users, self.n_items], 0)
-		#拆分，左边是user的右边是item的
+		#拆分，左边是user的右边是item 
         return u_g_embeddings, i_g_embeddings
 
     def _create_gcn_embed(self):
@@ -297,7 +299,7 @@ class NGCF(object):
 	#这里传入的users，pos_items等都为经过传播的embeddings
     def create_bpr_loss(self, users, pos_items, neg_items):
         pos_scores = tf.reduce_sum(tf.multiply(users, pos_items), axis=1)
-		#这里是对应元素相乘后每个user的预测值求和
+		#这里是对应元素相乘后每个user的预测值求 
         neg_scores = tf.reduce_sum(tf.multiply(users, neg_items), axis=1)
 
         regularizer = tf.nn.l2_loss(users) + tf.nn.l2_loss(pos_items) + tf.nn.l2_loss(neg_items)
@@ -318,9 +320,9 @@ class NGCF(object):
     def _convert_sp_mat_to_sp_tensor(self, X):
         coo = X.tocoo().astype(np.float32)
         indices = np.mat([coo.row, coo.col]).transpose()
-		#有value的[x,y]的索引矩阵
+		#有value的[x,y]的索引矩 
         return tf.SparseTensor(indices, coo.data, coo.shape)
-		#稀疏张量
+		#稀疏张 
 
     def _dropout_sparse(self, X, keep_prob, n_nonzero_elems):
         """
@@ -329,16 +331,16 @@ class NGCF(object):
         noise_shape = [n_nonzero_elems]
         random_tensor = keep_prob
         random_tensor += tf.random_uniform(noise_shape)
-		#0-1之间均匀分布的随机数，这样有keep_prob的概率保留
+		#0-1之间均匀分布的随机数，这样有keep_prob的概率保 
         dropout_mask = tf.cast(tf.floor(random_tensor), dtype=tf.bool)
         pre_out = tf.sparse_retain(X, dropout_mask)
-		#非空值中保留dropout_mask中为true的值
+		#非空值中保留dropout_mask中为true的 
 
         return pre_out * tf.div(1., keep_prob)
 		#不懂
 
 def load_pretrained_data():
-    pretrain_path = '%spretrain/%s/%s.npz' % (args.proj_path, args.dataset, 'embedding')
+    pretrain_path = '/output/%s/pretrain/%s/%s.npz' % (args.negative_samples, args.dataset, 'embedding')
     try:
         pretrain_data = np.load(pretrain_path)
         print('load the pretrained embeddings.')
@@ -364,7 +366,7 @@ if __name__ == '__main__':
         config['norm_adj'] = plain_adj
         print('use the plain adjacency matrix')
 
-	#A+I后转化为单位阵
+	#A+I后转化为单位 
     elif args.adj_type == 'norm':
         config['norm_adj'] = norm_adj
         print('use the normalized adjacency matrix')
@@ -397,7 +399,7 @@ if __name__ == '__main__':
 
     if args.save_flag == 1:
         layer = '-'.join([str(l) for l in eval(args.layer_size)])
-        weights_save_path = '%sweights/%s/%s/%s/l%s_r%s' % (args.weights_path, args.dataset, model.model_type, layer,
+        weights_save_path = '/output/%s/weights/%s/%s/%s/l%s_r%s' % (args.negative_samples, args.dataset, model.model_type, layer,
                                                             str(args.lr), '-'.join([str(r) for r in eval(args.regs)]))
         ensureDir(weights_save_path)
         save_saver = tf.train.Saver(max_to_keep=1)
@@ -413,7 +415,7 @@ if __name__ == '__main__':
     if args.pretrain == 1:
         layer = '-'.join([str(l) for l in eval(args.layer_size)])
 
-        pretrain_path = '%sweights/%s/%s/%s/l%s_r%s' % (args.weights_path, args.dataset, model.model_type, layer,
+        pretrain_path = '/output/%s/weights/%s/%s/%s/l%s_r%s' % (args.negative_samples, args.dataset, model.model_type, layer,
                                                         str(args.lr), '-'.join([str(r) for r in eval(args.regs)]))
 
 
@@ -457,7 +459,7 @@ if __name__ == '__main__':
         users_to_test_list.append(list(data_generator.test_set.keys()))
         split_state.append('all')
 
-        report_path = '%sreport/%s/%s.result' % (args.proj_path, args.dataset, model.model_type)
+        report_path = '/output/%s/report/%s/%s.result' % (args.negative_samples, args.dataset, model.model_type)
         ensureDir(report_path)
         f = open(report_path, 'w')
         f.write(
@@ -486,13 +488,22 @@ if __name__ == '__main__':
     stopping_step = 0
     should_stop = False
 
-    for epoch in range(args.epoch):
+    #for epoch in range(args.epoch):
+    epoch = -1
+    while True:
+        epoch = epoch + 1
         t1 = time()
         loss, mf_loss, emb_loss, reg_loss = 0., 0., 0., 0.
         n_batch = data_generator.n_train // args.batch_size + 1
+        
+        if data_generator.batch_size <= data_generator.n_users:
+            users_to_test = rd.sample(data_generator.exist_users, data_generator.batch_size)
+        else:
+            users_to_test = [rd.choice(data_generator.exist_users) for _ in range(data_generator.batch_size)]
+        ratings = test_ret_ratings(sess, model, users_to_test, drop_flag=True)
 
         for idx in range(n_batch):
-            users, pos_items, neg_items = data_generator.sample()
+            users, pos_items, neg_items = data_generator.sample(ratings, model.neg_num, users_to_test)
             _, batch_loss, batch_mf_loss, batch_emb_loss, batch_reg_loss = sess.run([model.opt, model.loss, model.mf_loss, model.emb_loss, model.reg_loss],
                                feed_dict={model.users: users, 
 										  model.pos_items: pos_items,
@@ -508,6 +519,7 @@ if __name__ == '__main__':
             print('ERROR: loss is nan.')
             sys.exit()
 
+
         # print the test evaluation metrics each 10 epochs; pos:neg = 1:10.
         if (epoch + 1) % 10 != 0:
             if args.verbose > 0 and epoch % args.verbose == 0:
@@ -521,11 +533,15 @@ if __name__ == '__main__':
         ret = test(sess, model, users_to_test, drop_flag=True)
         t3 = time()
 
+
+
         loss_loger.append(loss)
         rec_loger.append(ret['recall'])
         pre_loger.append(ret['precision'])
         ndcg_loger.append(ret['ndcg'])
         hit_loger.append(ret['hit_ratio'])
+
+
 
         if args.verbose > 0:
             perf_str = 'Epoch %d [%.1fs + %.1fs]: train==[%.5f=%.5f + %.5f + %.5f], recall=[%.5f, %.5f], ' \
@@ -564,12 +580,30 @@ if __name__ == '__main__':
                   '\t'.join(['%.5f' % r for r in ndcgs[idx]]))
     print(final_perf)
 
-    save_path = '%soutput/%s/%s.result' % (args.proj_path, args.dataset, model.model_type)
+    save_path = '/output/%s/%s/%s.result' % (args.negative_samples, args.dataset, model.model_type)
     ensureDir(save_path)
     f = open(save_path, 'a')
 
-    f.write(
-        'embed_size=%d, lr=%.4f, layer_size=%s, node_dropout=%s, mess_dropout=%s, regs=%s, adj_type=%s\n\t%s\n'
-        % (args.embed_size, args.lr, args.layer_size, args.node_dropout, args.mess_dropout, args.regs,
-           args.adj_type, final_perf))
+    print(recs.shape[0], recs.shape[1], file = f)
+
+    for i in range(recs.shape[0]):
+        for j in range(recs.shape[1]):
+            print(recs[i][j], end = '', file = f)
+        print(file = f)
+
+    for i in range(pres.shape[0]):
+        for j in range(pres.shape[1]):
+            print(pres[i][j], end = '', file = f)
+        print(file = f)
+
+    for i in range(ndcgs.shape[0]):
+        for j in range(ndcgs.shape[1]):
+            print(ndcgs[i][j], end = '', file = f)
+        print(file = f)
+
+    for i in range(hit.shape[0]):
+        for j in range(hit.shape[1]):
+            print(hit[i][j], end = '', file = f)
+        print(file = f)
+
     f.close()
